@@ -104,7 +104,9 @@ export default class Lexer {
                 return valIndex > -1 ? valIndex : restOfLine.length;
             }));
 
-            let minIndex = Math.min(keywordIndex, builtinIndex, operatorIndex);
+            const quoteIndex = restOfLine.indexOf('"');
+
+            let minIndex = Math.min(keywordIndex, builtinIndex, operatorIndex, quoteIndex);
 
             token = restOfLine.substr(0, minIndex).trim();
             index += minIndex;
