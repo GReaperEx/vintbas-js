@@ -49,7 +49,7 @@ export default class Lexer {
                     token += lineStr[index];
                 }
                 if (index === lineStr.length) {
-                    token += "\b";
+                    token += "\n";
                 }
                 type = this.TOKTYPES.STRING;
                 return [ { type: type, value: token }, lineStr.substr(index + 1) ];
