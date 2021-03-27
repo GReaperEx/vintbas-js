@@ -37,7 +37,7 @@ export default class Lexer {
             let type, token = "";
             let index = 0;
 
-            while (lineStr[index].trim() === "") {
+            while (lineStr[index] && lineStr[index].trim() === "") {
                 ++index;
             }
             if (index >= lineStr.length) {
@@ -72,7 +72,7 @@ export default class Lexer {
                 return [ { type: type, value: token }, lineStr.substr(index) ];
             }
 
-            const re = /[+-]?\d*(\.\d*)?(E[+-]?\d+)?/i;
+            const re = /\d*(\.\d*)?(E[+-]?\d+)?/i;
             const found = restOfLine.match(re);
             if (found && found[0] !== "" && found.index === 0) {
                 token = found[0];
@@ -104,7 +104,10 @@ export default class Lexer {
                 return valIndex > -1 ? valIndex : restOfLine.length;
             }));
 
-            const quoteIndex = restOfLine.indexOf('"');
+            let quoteIndex = restOfLine.indexOf('"');
+            if (quoteIndex === -1) {
+                quoteIndex = restOfLine.length;
+            }
 
             let minIndex = Math.min(keywordIndex, builtinIndex, operatorIndex, quoteIndex);
 
