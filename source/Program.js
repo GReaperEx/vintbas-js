@@ -127,10 +127,11 @@ export default class Program {
             return 1;
         }
 
+        if (pos.find((elem, i) => cur > arr.dims[i])) {
+            return 2;
+        }
+
         const index = pos.reduce((prev, cur, i) => {
-            if (cur > arr.dims[i]) {
-                return 2;
-            }
             return prev*(i !== 0 ? arr.dims[i - 1] : 0) + cur;
         }, 0);
 
@@ -192,7 +193,7 @@ function runStatement(program, lexemes, curIndex) {
 
     [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "DEF");
     if (found) {
-        throw `!NOT IMPLEMENTED YET IN LINE ${lexemes[0].value}`;
+        return impl_DEF(program, lexemes, curIndex);
     }
 
     [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "DIM");
@@ -211,12 +212,7 @@ function runStatement(program, lexemes, curIndex) {
         throw `!NOT IMPLEMENTED YET IN LINE ${lexemes[0].value}`;
     }
 
-    [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "GOSUB");
-    if (found) {
-        throw `!NOT IMPLEMENTED YET IN LINE ${lexemes[0].value}`;
-    }
-
-    [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "GOTO");
+    [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "GO");
     if (found) {
         throw `!NOT IMPLEMENTED YET IN LINE ${lexemes[0].value}`;
     }
@@ -325,6 +321,33 @@ function impl_LET(program, lexemes, curIndex) {
             break;
         }
     }
+    return [program.curLine + (curIndex >= lexemes.length), curIndex];
+}
+
+function impl_DEF(program, lexemes, curIndex) {
+    curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "FN");
+    curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.VARNAME);
+    const funcName = lexemes[curIndex - 1].value;
+    let args = [];
+
+    curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, '(');
+    let foundArg = true;
+    while (foundArg) {
+        curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.VARNAME);
+        args.push(lexemes[curIndex - 1].value);
+        [foundArg, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ',');
+    }
+    curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ')');
+    curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, '=');
+
+    program.functions[funcName] = {
+        args: args,
+        lexemes: lexemes.filter((lex, i) => {
+            return i === 0 || i >= curIndex;
+        })
+    };
+    curIndex = lexemes.length;
+
     return [program.curLine + (curIndex >= lexemes.length), curIndex];
 }
 
@@ -494,7 +517,7 @@ function eval_stage7(program, lexemes, curIndex) {
     }
     if (powArray.length !== 1) {
         newValue = 1;
-        for (let i = powArray - 1; i >= 0; --i) {
+        for (let i = powArray.length - 1; i >= 0; --i) {
             newValue = Math.pow(powArray[i], newValue);
         }
     }
@@ -535,7 +558,7 @@ function eval_stage9(program, lexemes, curIndex) {
         return [newValue, curIndex];
     }
 
-    [newValue, curIndex] = eval_var_builtin(program, lexemes, curIndex);
+    [newValue, curIndex] = eval_var_builtin_func(program, lexemes, curIndex);
     if (newValue !== undefined) {
         return [newValue, curIndex];
     }
@@ -554,12 +577,14 @@ function eval_stage9(program, lexemes, curIndex) {
     return [newValue, curIndex];
 }
 
-function eval_var_builtin(program, lexemes, curIndex) {
+function eval_var_builtin_func(program, lexemes, curIndex) {
     let newValue, found, varName;
 
-    [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.BUILTIN);
+    [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "FN");
     if (found) {
         let foundParam = true, params = [];
+        curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.VARNAME);
+        const funcName = lexemes[curIndex - 1].value;
         curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, '(');
 
         while (foundParam) {
@@ -567,7 +592,24 @@ function eval_var_builtin(program, lexemes, curIndex) {
             params.push(newValue);
             [foundParam, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ',');
         }
-        newValue = runBuiltin(program, lexemes[0].value, lexemes[curIndex - 1].value, params);
+        newValue = runFunction(program, lexemes[0].value, funcName, params);
+
+        curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ')');
+        return [newValue, curIndex];
+    }
+
+    [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.BUILTIN);
+    if (found) {
+        let foundParam = true, params = [];
+        const funcName = lexemes[curIndex - 1].value;
+        curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, '(');
+
+        while (foundParam) {
+            [newValue, curIndex] = evalExpression(program, lexemes, curIndex);
+            params.push(newValue);
+            [foundParam, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ',');
+        }
+        newValue = runBuiltin(program, lexemes[0].value, funcName, params);
 
         curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ')');
         return [newValue, curIndex];
@@ -613,7 +655,42 @@ function eval_var_builtin(program, lexemes, curIndex) {
     return [newValue, curIndex];
 }
 
-var randSeed = Math.floor(Math.random()*4294967296);
+function runFunction(program, line, funcName, params) {
+    const func = program.functions[funcName];
+    if (!func) {
+        throw `!UNDEFINED FUNCTION ${funcName} IN LINE ${line}`;
+    }
+    if (params.length !== func.args.length) {
+        throw `!WRONG NUMBER OF ARGUMENTS IN LINE ${line}`;
+    }
+
+    const foundInvalid = params.find((elem, i) => {
+        if (typeof(elem) === "string" && !func.args[i].value.endsWith("$")) {
+            return true;
+        }
+        if (typeof(elem) === "number" && Math.floor(elem) !== elem && func.args[i].value.endsWith("%")) {
+            return true;
+        }
+        return false;
+    });
+    if (foundInvalid) {
+        throw `!INVALID ARGUMENT IN LINE ${line}`;
+    }
+
+    let result, curIndex;
+    const oldVars = JSON.stringify(program.variables);
+
+    params.forEach((elem, i) => {
+        program.setVariable(func.args[i], elem);
+    });
+
+    [result, curIndex] = evalExpression(program, func.lexemes, 1);
+
+    program.variables = JSON.parse(oldVars);
+    return result;
+}
+
+var randSeed = Math.floor(Math.random()*0x8000);
 
 function runBuiltin(program, line, funcName, params) {
     let result;
@@ -739,6 +816,7 @@ function runBuiltin(program, line, funcName, params) {
                 result = randSeed/0x8000;
             } else if (params[0] < 0) {
                 randSeed = Math.floor(params[0]);
+                result = 0;
             } else {
                 result = randSeed/0x8000;
             }
