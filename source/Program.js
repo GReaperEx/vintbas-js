@@ -55,7 +55,7 @@ export default class Program {
 
         // TODO: Parse DATA values
 
-        while (this.running) {
+        while (this.running && this.curLine < this.lines.length) {
             this.runNextLine();
         }
     }
@@ -63,10 +63,15 @@ export default class Program {
     runNextLine() {
         let found = true;
         let curIndex = 1;
+        const currentLine = this.curLine;
 
         while (this.running && found) {
             [this.curLine, curIndex] = runStatement(this, this.lines[this.curLine], curIndex);
-            [found, curIndex] = consume(this.lines[this.curLine], curIndex, Lexer.OPERATORS, ':');
+            if (currentLine === this.curLine) {
+                [found, curIndex] = consume(this.lines[this.curLine], curIndex, Lexer.OPERATORS, ':');
+            } else {
+                found = false;
+            }
         }
     }
 
