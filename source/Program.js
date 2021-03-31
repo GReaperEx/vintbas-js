@@ -127,7 +127,7 @@ export default class Program {
             return 1;
         }
 
-        if (pos.find((elem, i) => cur > arr.dims[i])) {
+        if (pos.find((elem, i) => elem > arr.dims[i])) {
             return 2;
         }
 
@@ -198,7 +198,7 @@ function runStatement(program, lexemes, curIndex) {
 
     [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "DIM");
     if (found) {
-        throw `!NOT IMPLEMENTED YET IN LINE ${lexemes[0].value}`;
+        return impl_DIM(program, lexemes, curIndex);
     }
 
     [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "END");
@@ -239,7 +239,7 @@ function runStatement(program, lexemes, curIndex) {
 
     [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "PRINT");
     if (found) {
-        throw `!NOT IMPLEMENTED YET IN LINE ${lexemes[0].value}`;
+        return impl_PRINT(program, lexemes, curIndex);
     }
 
     [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "RANDOMIZE");
@@ -348,6 +348,74 @@ function impl_DEF(program, lexemes, curIndex) {
     };
     curIndex = lexemes.length;
 
+    return [program.curLine + (curIndex >= lexemes.length), curIndex];
+}
+
+function impl_DIM(program, lexemes, curIndex) {
+    curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.VARNAME);
+    const arrName = lexemes[curIndex - 1].value;
+    let dims = [];
+
+    curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, '(');
+    let foundArg = true;
+    while (foundArg) {
+        let dimValue;
+        [dimValue, curIndex] = evalExpression(program, lexemes, curIndex);
+        dims.push(dimValue);
+        [foundArg, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ',');
+    }
+    curIndex = expect(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ')');
+
+    if (program.arrays[arrName]) {
+        throw `!REDIM'D ARRAY IN LINE ${lexemes[0].value}`;
+    }
+    program.arrays[arrName] = { dims: dims };
+
+    return [program.curLine + (curIndex >= lexemes.length), curIndex];
+}
+
+function impl_PRINT(program, lexemes, curIndex) {
+    let toPrint = "";
+    let moreExpr = true;
+
+    while (moreExpr) {
+        let newValue;
+        [newValue, curIndex] = evalExpression(program, lexemes, curIndex);
+        if (newValue !== undefined) {
+            const oldLen = toPrint.length;
+
+            if (typeof(newValue) === "string") {
+                toPrint += newValue;
+            } else if (typeof(newValue) === "number") {
+                toPrint += ' ';
+                if (newValue >= 0) {
+                    toPrint += ' ';
+                }
+                toPrint += newValue.toString();
+            }
+
+            program.curColumn += toPrint.length - oldLen;
+        }
+
+        let foundComma, foundSemicolon;
+
+        [foundComma, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ',');
+        if (foundComma) {
+            const oldLen = toPrint.length;
+            toPrint += (14 - program.curColumn % 14) % 14;
+            program.curColumn += toPrint.length - oldLen;
+        } else {
+            [foundSemicolon, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ';');
+        }
+
+        moreExpr = foundComma || foundSemicolon
+        if (!moreExpr) {
+            toPrint += '\n';
+            program.curColumn = 0;
+        }
+    }
+
+    program.outputCall(toPrint);
     return [program.curLine + (curIndex >= lexemes.length), curIndex];
 }
 
@@ -491,6 +559,9 @@ function eval_stage6(program, lexemes, curIndex) {
         [foundOper, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, "/");
         if (foundOper) {
             [temp, curIndex] = eval_stage7(program, lexemes, curIndex);
+            if (temp === 0) {
+                throw `!DIVISION BY ZERO IN LINE ${lexemes[0].value}`;
+            }
             newValue = (newValue / temp);
             continue;
         }
