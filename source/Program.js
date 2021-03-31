@@ -383,7 +383,7 @@ function impl_PRINT(program, lexemes, curIndex) {
     let toPrint = "";
     let moreExpr = true;
 
-    while (moreExpr) {
+    while (moreExpr && curIndex < lexemes.length) {
         let newValue;
         [newValue, curIndex] = evalExpression(program, lexemes, curIndex);
         if (newValue !== undefined) {
@@ -402,7 +402,7 @@ function impl_PRINT(program, lexemes, curIndex) {
             program.curColumn += toPrint.length - oldLen;
         }
 
-        let foundComma, foundSemicolon;
+        let foundComma = true, foundSemicolon = false;
 
         [foundComma, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ',');
         if (foundComma) {
@@ -413,7 +413,7 @@ function impl_PRINT(program, lexemes, curIndex) {
             [foundSemicolon, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ';');
         }
 
-        moreExpr = foundComma || foundSemicolon
+        moreExpr = foundComma || foundSemicolon;
         if (!moreExpr) {
             toPrint += '\n';
             program.curColumn = 0;
@@ -637,27 +637,21 @@ function eval_stage9(program, lexemes, curIndex) {
         return [newValue, curIndex];
     }
 
-    [newValue, curIndex] = eval_var_builtin_func(program, lexemes, curIndex);
-    if (newValue !== undefined) {
-        return [newValue, curIndex];
-    }
-
-    [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR);
-    if (found) {
-        throw `!SYNTAX ERROR IN LINE ${lexemes[0].value}`;
-    }
-
-    [found, curIndex] = consume(lexemes, curIndex);
-    if (!found) {
-        throw `!SYNTAX ERROR IN LINE ${lexemes[0].value}`;
-    }
-
-    newValue = lexemes[curIndex - 1].value;
-    return [newValue, curIndex];
+    return eval_var_builtin_func_literal(program, lexemes, curIndex);
 }
 
-function eval_var_builtin_func(program, lexemes, curIndex) {
+function eval_var_builtin_func_literal(program, lexemes, curIndex) {
     let newValue, found, varName;
+
+    [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.NUMBER);
+    if (found) {
+        return [ lexemes[curIndex - 1].value, curIndex ];
+    }
+
+    [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.STRING);
+    if (found) {
+        return [ lexemes[curIndex - 1].value, curIndex ];
+    }
 
     [found, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.KEYWORD, "FN");
     if (found) {
