@@ -29,13 +29,13 @@ export default class Program {
                     throw `!EXPECTED CLOSING QUOTE IN LINE ${lexemes[0].value}`;
                 }
                 if (lex.type === Lexer.TOKTYPES.VARNAME) {
-                    const regex = /^([A-Za-z]+)(\d*)$/;
+                    const regex = /^([A-Za-z]+)(\d*)([\%\$]?)$/;
                     const found = lex.value.match(regex);
                     if (!found) {
                         throw `!INVALID VARNAME IN LINE ${lexemes[0].value}`;
                     }
 
-                    const realName = found[1].substr(0, 2) + found[2].substr(0, 1);
+                    const realName = found[1].substr(0, 2) + found[2].substr(0, 1) + found[3];
                     lex.value = realName;
                 }
             }
@@ -114,7 +114,7 @@ export default class Program {
 
         if (arrName.endsWith('$')) {
             const varValue = arr[index] || "";
-            return varValue;
+            return [varValue, 0];
         }
 
         const varValue = arr[index] || 0;
@@ -616,7 +616,10 @@ function eval_stage8(program, lexemes, curIndex) {
     let newValue;
     [newValue, curIndex] = eval_stage9(program, lexemes, curIndex);
 
-    return [sign*newValue, curIndex];
+    if (sign < 0) {
+        return [newValue*sign, curIndex];
+    }
+    return [newValue, curIndex];
 }
 
 function eval_stage9(program, lexemes, curIndex) {
