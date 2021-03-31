@@ -407,7 +407,7 @@ function impl_PRINT(program, lexemes, curIndex) {
         [foundComma, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ',');
         if (foundComma) {
             const oldLen = toPrint.length;
-            toPrint += (14 - program.curColumn % 14) % 14;
+            toPrint += " ".repeat((14 - program.curColumn % 14) % 14);
             program.curColumn += toPrint.length - oldLen;
         } else {
             [foundSemicolon, curIndex] = consume(lexemes, curIndex, Lexer.TOKTYPES.OPERATOR, ';');
@@ -426,7 +426,7 @@ function impl_PRINT(program, lexemes, curIndex) {
 
 // eval_stage1(program, lexemes, curIndex) {
 function evalExpression(program, lexemes, curIndex) {
-    let newValue, found;
+    let newValue, found = true;
 
     [newValue, curIndex] = eval_stage2(program, lexemes, curIndex);
     while (found) {
